@@ -1,0 +1,321 @@
+<?php
+session_start();
+require 'includes/db.php';
+require_once __DIR__ . '/vendor/autoload.php'; // for mpdf (ensure composer installed)
+
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: login.php");
+    exit;
+}
+
+// --- sanitize / read inputs
+$variety   = $_POST['variety'] ?? '';
+$from_sph  = isset($_POST['from_sph']) ? floatval($_POST['from_sph']) : 0.0;
+$to_sph    = isset($_POST['to_sph'])   ? floatval($_POST['to_sph'])   : 0.0;
+$from_cyl  = isset($_POST['from_cyl']) ? floatval($_POST['from_cyl']) : 0.0;
+$to_cyl    = isset($_POST['to_cyl'])   ? floatval($_POST['to_cyl'])   : 0.0;
+$from_add  = isset($_POST['from_addition']) ? floatval($_POST['from_addition']) : null;
+$to_add    = isset($_POST['to_addition'])   ? floatval($_POST['to_addition'])   : null;
+$from_axis = isset($_POST['from_axis']) ? floatval($_POST['from_axis']) : 0.0;
+$to_axis   = isset($_POST['to_axis'])   ? floatval($_POST['to_axis'])   : 180.0;
+
+// If user left additions empty, use 0.00 default behaviour
+if ($from_add === null && $to_add === null) {
+    $from_add = 0.00;
+    $to_add = 0.00;
+} else {
+    // If only one provided treat both (rare) — normalize
+    $from_add = $from_add ?? $to_add;
+    $to_add   = $to_add ?? $from_add;
+}
+
+// ensure ranges correct order (user's selects might be descending)
+if ($from_sph > $to_sph) { $tmp=$from_sph; $from_sph=$to_sph; $to_sph=$tmp; }
+if ($from_cyl > $to_cyl) { $tmp=$from_cyl; $from_cyl=$to_cyl; $to_cyl=$tmp; }
+if ($from_add > $to_add) { $tmp=$from_add; $from_add=$to_add; $to_add=$tmp; }
+if ($from_axis > $to_axis){ $tmp=$from_axis; $from_axis=$to_axis; $to_axis=$tmp; }
+
+// Decide mode:
+// GRID mode if either Cylinder == 0.00 OR Addition == 0.00 (based on user's filter start)
+$grid_mode = ($from_cyl == 0.00 || $from_add == 0.00);
+
+// --- fetch aggregated stock from DB (purchase - sales)
+$sql = "
+SELECT 
+    pi.addition,
+    pi.spherical,
+    pi.cylinder,
+    pi.axis,
+    COALESCE(SUM(pi.quantity),0)
+      - COALESCE((
+          SELECT SUM(si.quantity)
+          FROM sale_items si
+          WHERE LOWER(si.item_name) = LOWER(pi.item_name)
+            AND si.spherical = pi.spherical
+            AND si.cylinder = pi.cylinder
+            AND (si.addition = pi.addition OR (si.addition IS NULL AND pi.addition IS NULL))
+            AND si.axis = pi.axis
+      ),0) AS available_stock
+FROM purchase_items pi
+WHERE LOWER(pi.item_name) = LOWER(:variety)
+  AND CAST(pi.spherical AS DECIMAL(7,2)) BETWEEN :from_sph AND :to_sph
+  AND CAST(pi.cylinder  AS DECIMAL(7,2)) BETWEEN :from_cyl AND :to_cyl
+  AND CAST(pi.addition  AS DECIMAL(7,2)) BETWEEN :from_add AND :to_add
+  AND CAST(pi.axis      AS DECIMAL(7,2)) BETWEEN :from_axis AND :to_axis
+GROUP BY pi.addition, pi.spherical, pi.cylinder, pi.axis
+ORDER BY pi.addition ASC, pi.axis ASC, pi.cylinder ASC, pi.spherical ASC
+";
+$stmt = $pdo->prepare($sql);
+$stmt->execute([
+    ':variety'   => $variety,
+    ':from_sph'  => $from_sph,
+    ':to_sph'    => $to_sph,
+    ':from_cyl'  => $from_cyl,
+    ':to_cyl'    => $to_cyl,
+    ':from_add'  => $from_add,
+    ':to_add'    => $to_add,
+    ':from_axis' => $from_axis,
+    ':to_axis'   => $to_axis
+]);
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// map rows for quick lookup: grouped by addition -> axis -> cylinder -> sph
+$map = [];
+$additions_present = [];
+$axes_present = [];
+foreach ($rows as $r) {
+    $add_k = number_format(floatval($r['addition']), 2);
+    $ax_k  = number_format(floatval($r['axis']), 0);
+    $cyl_k = number_format(floatval($r['cylinder']), 2);
+    $sph_k = number_format(floatval($r['spherical']), 2);
+    $map[$add_k][$ax_k][$cyl_k][$sph_k] = (int)$r['available_stock'];
+    $additions_present[$add_k] = true;
+    $axes_present[$ax_k] = true;
+}
+
+// Helper to produce ranges with step 0.25 (returns formatted strings)
+function range_step($start, $end, $step = 0.25) {
+    $arr = [];
+    if ($start <= $end) {
+        for ($v = $start; $v <= $end + 0.0001; $v += $step) $arr[] = number_format((float)$v, 2);
+    } else {
+        for ($v = $start; $v >= $end - 0.0001; $v -= $step) $arr[] = number_format((float)$v, 2);
+    }
+    return $arr;
+}
+
+// When in GRID mode we need full lists of additions (from filter), axes may be omitted from grid per requirement.
+$add_list = range_step($from_add, $to_add, 0.25);
+$sph_list = range_step($from_sph, $to_sph, 0.25);
+$cyl_list = range_step($from_cyl, $to_cyl, 0.25);
+$axis_list = range_step($from_axis, $to_axis, 1.0); // axis step 1
+
+// If there are no additions (edge) ensure at least 0.00
+if (empty($add_list)) $add_list = ['0.00'];
+
+// ----------------- PREPARE HTML (capture for optional mpdf) -----------------
+ob_start();
+?>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stock Report | AT Optical ERP</title>
+<style>
+/* ERP theme */
+body { background:#eef2f5; font-family:Arial,Helvetica,sans-serif; margin:0; color:#222; }
+.topbar { background:#0078d7; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; }
+.topbar nav a { color:#fff; text-decoration:none; margin-left:14px; font-weight:bold; }
+.container { max-width:1100px; margin:20px auto; background:#fff; padding:20px 24px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+h2 { color:#0078d7; margin:6px 0 12px 0; font-size:20px; }
+.report-header { background:#f4f8ff; border:1px solid #d0e4ff; border-radius:6px; padding:10px 12px; margin-bottom:16px; color:#004a99; }
+.report-header strong { color:#004a99; }
+.print-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px; }
+.btn { display:inline-block; background:#0078d7; color:#fff; text-decoration:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
+.btn:hover { background:#005bb5; }
+.notice { text-align:center; background:#fff8e6; color:#d66; border:1px dashed #e3b75f; border-radius:8px; padding:12px; margin-bottom:12px; font-weight:bold; }
+.table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+.table th, .table td { border:1px solid #ccc; padding:6px; text-align:center; vertical-align:middle; }
+.table th { background:#f1f6ff; color:#004a99; font-weight:600; }
+.grid-heading { background:#0078d7; color:#fff; padding:8px 10px; border-radius:6px; display:inline-block; margin-top:12px; font-weight:700; }
+.zero { color:#999; }
+.section-break { page-break-before: always; margin-top:18px; }
+.axis-toggle { margin-left:8px; font-size:13px; color:#0078d7; cursor:pointer; text-decoration:underline; background:none; border:none; }
+@media print { .topbar, .btn, .axis-toggle { display:none !important; } .container { box-shadow:none; margin:0; padding:0; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div><strong>AT Optical ERP</strong> | Stock Report</div>
+  <nav>
+    <a href="dashboard.php">Dashboard</a>
+    <a href="stock.php" style="text-decoration:underline;">Stock</a>
+    <a href="logout.php" style="color:#ffdddd;">Logout</a>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="print-row">
+    <div>
+      <a href="stock.php" class="btn">← Back to Filter</a>
+      <button class="btn" onclick="window.print();">🖨️ Print</button>
+      <form id="pdfForm" method="post" style="display:inline;">
+        <?php
+        // re-post same inputs for pdf generation
+        foreach (['variety','from_sph','to_sph','from_cyl','to_cyl','from_addition','to_addition','from_axis','to_axis'] as $k) {
+            $v = $_POST[$k] ?? '';
+            $v = htmlspecialchars($v, ENT_QUOTES);
+            echo "<input type=\"hidden\" name=\"$k\" value=\"$v\">";
+        }
+        ?>
+        <input type="hidden" name="download_pdf" value="1">
+        <button type="submit" class="btn">⬇️ Download PDF</button>
+      </form>
+    </div>
+
+    <div>
+      <label style="font-size:13px;color:#444;">Show Axis in List: 
+        <input id="axisCheck" type="checkbox" checked style="margin-left:6px;">
+      </label>
+    </div>
+  </div>
+
+  <h2>Stock Report</h2>
+
+
+  <?php if (empty($rows)): ?>
+    <div class="notice">⚠️ Koi stock record nahi mila selected filters ke liye. (Showing zeros grid/list)</div>
+  <?php endif; ?>
+
+  <?php
+  // MODE 1: GRID (DEMO) if cylinder=0.00 OR addition=0.00
+  if ($grid_mode):
+    // Grid mode: if cylinder=0.00 → show single combined grid (no multiple addition pages)
+    if ($from_cyl == 0.00 && $to_cyl == 0.00) {
+        $add_list = [$from_add]; // only one addition section
+    }
+    foreach ($add_list as $idx => $add):
+        if ($idx>0) echo '<div class="section-break"></div>';
+        // agar cylinder 0.00 ho to heading sirf ek variety name wali dikhe
+        $showAddHeading = !($from_cyl == 0.00 && $to_cyl == 0.00);
+ ?>
+      <?php if ($showAddHeading): ?>
+        <div class="grid-heading">Addition: <?= htmlspecialchars($add) ?></div>
+      <?php else: ?>
+        <div style="margin-bottom:6px;"><strong><?= htmlspecialchars($variety) ?></strong></div>
+      <?php endif; ?>
+
+      <table class="table" style="margin-top:8px;">
+        <thead>
+          <tr>
+            <th style="min-width:100px">CYL / SPH</th>
+            <?php foreach ($sph_list as $sph): ?>
+              <th><?= htmlspecialchars($sph) ?></th>
+            <?php endforeach; ?>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($cyl_list as $cyl): ?>
+            <tr>
+              <th><?= htmlspecialchars($cyl) ?></th>
+              <?php foreach ($sph_list as $sph):
+                  $val = 0;
+                  $addk = number_format((float)$add,2);
+                  if (isset($map[$addk])) {
+                      // axis ignored in grid — sum over axis if multiple axis rows exist for same add/cyl/sph
+                      $sum = 0;
+                      foreach ($map[$addk] as $ax => $cgroup) {
+                          if (isset($cgroup[$cyl][$sph])) $sum += (int)$cgroup[$cyl][$sph];
+                      }
+                      $val = $sum;
+                  }
+              ?>
+                <td class="<?= $val==0 ? 'zero' : '' ?>"><?= htmlspecialchars($val) ?></td>
+              <?php endforeach; ?>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+
+  <?php
+      endforeach; // additions
+  else:
+      // MODE 2: NORMAL LIST — show grouped by addition and axis, axis column visible (toggleable)
+      if (empty($map)) {
+          // no DB rows — still show empties for addition range with zero values
+          foreach ($add_list as $addk) {
+              echo '<div class="addition-heading" style="margin-top:12px;">Addition: '.htmlspecialchars($addk).'</div>';
+              echo '<table class="table"><thead><tr><th>SPH</th><th>CYL</th><th class="axis-col">Axis</th><th>Available Stock</th></tr></thead><tbody>';
+              // show all combinations as zeros
+              foreach ($sph_list as $sph) {
+                  foreach ($cyl_list as $cyl) {
+                      echo '<tr><td>'.htmlspecialchars($sph).'</td><td>'.htmlspecialchars($cyl).'</td><td class="axis-col">-</td><td class="zero">0</td></tr>';
+                  }
+              }
+              echo '</tbody></table>';
+          }
+      } else {
+          // have DB rows — iterate additions and their axis groups
+          foreach ($map as $addk => $axes):
+              echo '<div class="addition-heading" style="margin-top:12px;">Addition: '.htmlspecialchars($addk).'</div>';
+              echo '<table class="table"><thead><tr><th>SPH</th><th>CYL</th><th class="axis-col">Axis</th><th>Available Stock</th></tr></thead><tbody>';
+              // flatten rows for this addition: show each axis/cyl/sph row present in DB; but also include missing combos? User asked normal stock style (only present combos)
+              // We'll show DB combos (present) — this matches "normal stock" behaviour requested.
+              foreach ($axes as $ax => $cyls) {
+                  foreach ($cyls as $cylk => $sphs) {
+                      foreach ($sphs as $sphk => $qty) {
+                          echo '<tr>';
+                          echo '<td>'.htmlspecialchars($sphk).'</td>';
+                          echo '<td>'.htmlspecialchars($cylk).'</td>';
+                          echo '<td class="axis-col">'.htmlspecialchars($ax).'</td>';
+                          echo '<td>'.htmlspecialchars($qty).'</td>';
+                          echo '</tr>';
+                      }
+                  }
+              }
+              echo '</tbody></table>';
+          endforeach;
+      }
+  endif;
+  ?>
+
+</div>
+
+<script>
+// Axis toggle for list mode
+document.getElementById('axisCheck').addEventListener('change', function(e){
+    var show = e.target.checked;
+    var elts = document.querySelectorAll('.axis-col');
+    elts.forEach(function(td){
+        td.style.display = show ? '' : 'none';
+    });
+});
+// On load: hide axis cells if unchecked initial
+if (!document.getElementById('axisCheck').checked) {
+    var elts = document.querySelectorAll('.axis-col');
+    elts.forEach(function(td){ td.style.display = 'none'; });
+}
+</script>
+</body>
+</html>
+<?php
+$html = ob_get_clean();
+
+// If user requested server-side PDF generation (mpdf)
+if (!empty($_POST['download_pdf'])) {
+    try {
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => __DIR__ . '/tmp']); // tempDir sometimes needed on windows
+        // set base path css friendly
+        $mpdf->WriteHTML($html);
+        $mpdf->Output('stock_report.pdf', 'D');
+        exit;
+    } catch (\Mpdf\MpdfException $e) {
+        // fallback: show HTML and an error message
+        echo $html;
+        echo "<p style='color:red;text-align:center'>PDF generation failed: ".htmlspecialchars($e->getMessage())."</p>";
+        exit;
+    }
+}
+
+// Otherwise output HTML
+echo $html;

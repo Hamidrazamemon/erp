@@ -68,16 +68,19 @@ $items = $pdo->query("SELECT * FROM items ORDER BY id DESC")->fetchAll(PDO::FETC
     <div class="topbar">
         <div><strong>AT Optical ERP</strong> | Items</div>
         <nav>
-            <a href="dashboard.php">Dashboard</a>
-            <a href="items.php">Items</a>
-            <a href="suppliers.php">Suppliers</a>
-            <a href="customers.php">Customers</a>
-            <a href="purchase.php">Purchase</a>
-            <a href="sales.php">Sales</a>
-            <a href="ledger.php">Ledger</a>
-            <a href="stock.php">Stock</a>
-            <a href="logout.php" style="color:#ffdddd;">Logout</a>
-        </nav>
+    <a href="dashboard.php">Dashboard</a>
+    <a href="glass.php">Glasses</a>
+    <a href="suppliers.php">Suppliers</a>
+    <a href="customers.php">Customers</a>
+    <a href="purchase.php">Purchase</a>
+    <a href="sales.php">Sales</a>
+    <a href="ledger.php">Ledger</a>
+    <a href="stock.php">Stock</a>
+    <a href="balace.php">Balance</a>
+    <a href="report.php">Report</a>
+    <a href="rate_list.php">Rate List</a>
+    <a href="logout.php" style="color:#ffdddd;">Logout</a>
+  </nav>
     </div>
 
     <div class="container">

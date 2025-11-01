@@ -123,6 +123,51 @@ button,.btn{background:#0078d7;color:#fff;border:none;border-radius:6px;padding:
 button:hover,.btn:hover{background:#005bb5}
 .btn-green{background:#28a745}
 .btn-green:hover{background:#1e7e34}
+
+nav {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  background:#0078d7;
+  padding:12px 20px;
+  flex-wrap:wrap;
+}
+nav a, .dropbtn {
+  color:#fff;
+  text-decoration:none;
+  font-weight:bold;
+  padding:6px 10px;
+  border:none;
+  background:none;
+  cursor:pointer;
+}
+nav a:hover, .dropbtn:hover { text-decoration:underline; }
+
+.dropdown {
+  position:relative;
+  display:inline-block;
+}
+.dropdown-content {
+  display:none;
+  position:absolute;
+  background:#0078d7;
+  min-width:180px;
+  box-shadow:0 4px 8px rgba(0,0,0,0.2);
+  z-index:1;
+  border-radius:6px;
+  overflow:hidden;
+}
+.dropdown-content a { 
+  padding:10px 14px;
+  text-decoration:none;
+  display:block;
+}
+.dropdown-content a:hover { background:black; }
+
+.dropdown:hover .dropdown-content { display:block; }
+h2 { color:#0078d7; margin-top:0; text-align:center; }
+
+
 @media print{body{background:#fff;color:#000;font-size:10px}.topbar,.buttons{display:none}.container{box-shadow:none;margin:0;padding:0;width:100%}.table-container{overflow-x:visible}table{border-collapse:collapse;table-layout:auto;width:100%;font-size:10px}th,td{border:1px solid #000;padding:2px 6px;text-align:center;vertical-align:middle;white-space:normal}th{background-color:#0078d7 !important;color:#fff !important;font-weight:600}tr:nth-child(even){background-color:#f9fafc}h2{font-size:16px;margin-bottom:6px;text-align:center;color:#000}}
 </style>
 </head>
@@ -130,10 +175,51 @@ button:hover,.btn:hover{background:#005bb5}
 <div class="topbar">
   <div><strong>AT Optical ERP</strong> | Stock Report</div>
   <nav>
-    <a href="dashboard.php">Dashboard</a>
-    <a href="stock.php" style="text-decoration:underline;">Stock</a>
-    <a href="logout.php" style="color:#ffdddd;">Logout</a>
-  </nav>
+    <nav>
+  <a href="dashboard.php">Dashboard</a>
+  <a href="glass.php">Glasses</a>
+  <a href="suppliers.php">Suppliers</a>
+  <a href="customers.php">Customers</a>
+
+  <!-- Purchase Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn">Purchase ▼</button>
+    <div class="dropdown-content">
+      <a href="purchase.php">Add Purchase</a>
+      <a href="purchase_view.php">View Purchases</a>
+      <a href="purchase_return.php">Add Purchase Return</a>
+      <a href="purchase_return_view.php">View Purchase Returns</a>
+    </div>
+  </div>
+
+  <!-- Sales Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn">Sales ▼</button>
+    <div class="dropdown-content">
+      <a href="sales.php">Add Sale</a>
+      <a href="sale_view.php">View Sales</a>
+      <a href="sale_return.php">Add Sale Return</a>
+      <a href="sale_return_view.php">View Sale Returns</a>
+    </div>
+  </div>
+
+
+  <!-- Report Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn" style="text-decoration:underline;">Report ▼</button>
+    <div class="dropdown-content">
+      <a href="report.php">Main Report</a>
+      <a href="rate_list.php">Rate List</a>
+       <a href="ledger.php">Ledger</a>
+  <a href="stock.php" style="text-decoration:underline;">Stock</a>
+  <a href="balance.php">Balance</a>
+
+    </div>
+  </div>
+
+  <a href="logout.php" style="color:#ffdddd;">Logout</a>
+</nav>
+
 </div>
 
 <div class="container">

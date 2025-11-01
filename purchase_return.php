@@ -12,33 +12,79 @@ $purchases = $pdo->query("SELECT id,purchase_no FROM purchases ORDER BY created_
 <title>Purchase Return | AT Optical ERP</title>
 <style>
 body { font-family:Arial,sans-serif; background:#f4f6f8; margin:0; }
-.topbar { background:#0078d7; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; }
-.topbar nav a { color:#fff; text-decoration:none; margin-left:14px; font-weight:bold; }
-.topbar nav a:hover { text-decoration:underline; }
+.topbar {
+  background:#0078d7; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+}
+nav a, .dropbtn {
+  color:#fff; text-decoration:none; font-weight:bold; padding:6px 10px; border:none; background:none; cursor:pointer;
+}
+nav a:hover, .dropbtn:hover { text-decoration:underline; }
+.dropdown { position:relative; display:inline-block; }
+.dropdown-content {
+  display:none; position:absolute; background:#fff; min-width:180px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:1; border-radius:6px; overflow:hidden;
+}
+.dropdown-content a { color:#0078d7; padding:10px 14px; text-decoration:none; display:block; }
+.dropdown-content a:hover { background:#f1f1f1; }
+.dropdown:hover .dropdown-content { display:block; }
+
 .container{max-width:1200px;margin:20px auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 0 8px rgba(0,0,0,.08)}
-table{width:100%;border-collapse:collapse}
+table{width:100%;border-collapse:collapse;margin-top:15px}
 th,td{border:1px solid #ddd;padding:8px;text-align:center}
 th{background:#0078d7;color:#fff}
-select,input{padding:6px;border:1px solid #ccc;border-radius:4px;width:100%}
-button{padding:7px 12px;border:none;border-radius:4px;cursor:pointer}
-.small{width:120px}
-.hidden{display:none}
+a.button{padding:4px 10px;border-radius:4px;background:#dc3545;color:#fff;text-decoration:none;margin-right:4px;}
+a.pdf-button{padding:4px 10px;border-radius:4px;background:#28a745;color:#fff;text-decoration:none;}
+a.button:hover, a.pdf-button:hover{opacity:0.9;}
+h2{color:#0078d7;margin-top:0;}
+
 </style>
 </head>
 <body>
 <div class="topbar">
   <div><strong>AT Optical ERP</strong> — Purchase Return</div>
   <nav>
-    <a href="dashboard.php">Dashboard</a>
-    <a href="glass.php">Glasses</a>
-    <a href="suppliers.php">Suppliers</a>
-    <a href="customers.php">Customers</a>
-    <a href="purchase.php">Purchase</a>
-    <a href="sales.php">Sales</a>
-    <a href="ledger.php">Ledger</a>
-    <a href="stock.php">Stock</a>
-    <a href="logout.php" style="color:#ffdddd;">Logout</a>
-  </nav>
+  <a href="dashboard.php">Dashboard</a>
+  <a href="glass.php">Glasses</a>
+  <a href="suppliers.php">Suppliers</a>
+  <a href="customers.php">Customers</a>
+
+  <!-- Purchase Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn">Purchase ▼</button>
+    <div class="dropdown-content">
+      <a href="purchase.php">Add Purchase</a>
+      <a href="purchase_view.php">View Purchases</a>
+      <a href="purchase_return.php">Add Purchase Return</a>
+      <a href="purchase_return_view.php">View Purchase Returns</a>
+    </div>
+  </div>
+
+  <!-- Sales Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn">Sales ▼</button>
+    <div class="dropdown-content">
+      <a href="sales.php">Add Sale</a>
+      <a href="sale_view.php">View Sales</a>
+      <a href="sale_return.php">Add Sale Return</a>
+      <a href="sale_return_view.php">View Sale Returns</a>
+    </div>
+  </div>
+
+
+  <!-- Report Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn" style="text-decoration:underline;">Report ▼</button>
+    <div class="dropdown-content">
+      <a href="report.php">Main Report</a>
+      <a href="rate_list.php">Rate List</a>
+       <a href="ledger.php">Ledger</a>
+  <a href="stock.php">Stock</a>
+  <a href="balance.php" style="text-decoration:underline;">Balance</a>
+
+    </div>
+  </div>
+
+  <a href="logout.php" style="color:#ffdddd;">Logout</a>
+</nav>
 </div>
 
 <div class="container">

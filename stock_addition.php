@@ -107,7 +107,48 @@ td.zero { color:#999; }
   padding:10px 18px; border-radius:6px; margin-top:15px; transition:0.3s;
 }
 .btn-back:hover, .btn-action:hover { background:#005bb5; }
+nav {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  background:#0078d7;
+  padding:12px 20px;
+  flex-wrap:wrap;
+}
+nav a, .dropbtn {
+  color:#fff;
+  text-decoration:none;
+  font-weight:bold;
+  padding:6px 10px;
+  border:none;
+  background:none;
+  cursor:pointer;
+}
+nav a:hover, .dropbtn:hover { text-decoration:underline; }
 
+.dropdown {
+  position:relative;
+  display:inline-block;
+}
+.dropdown-content {
+  display:none;
+  position:absolute;
+  background:#0078d7;
+  min-width:180px;
+  box-shadow:0 4px 8px rgba(0,0,0,0.2);
+  z-index:1;
+  border-radius:6px;
+  overflow:hidden;
+}
+.dropdown-content a { 
+  padding:10px 14px;
+  text-decoration:none;
+  display:block;
+}
+.dropdown-content a:hover { background:black; }
+
+.dropdown:hover .dropdown-content { display:block; }
+h2 { color:#0078d7; margin-top:0; text-align:center; }
 /* ✅ Print Styling (portrait) */
 @media print {
   @page { size: A4 portrait; margin:10mm; }
@@ -124,17 +165,51 @@ td.zero { color:#999; }
 <body>
 <div class="topbar">
   <div><strong>AT Optical ERP</strong> | Stock Report</div>
-  <nav>
-    <a href="dashboard.php">Dashboard</a>
-    <a href="glass.php">Glasses</a>
-    <a href="suppliers.php">Suppliers</a>
-    <a href="customers.php">Customers</a>
-    <a href="purchase.php">Purchase</a>
-    <a href="sales.php">Sales</a>
-    <a href="ledger.php">Ledger</a>
-    <a href="stock.php" style="text-decoration:underline;">Stock</a>
-    <a href="logout.php" style="color:#ffdddd;">Logout</a>
-  </nav>
+ <nav>
+  <a href="dashboard.php">Dashboard</a>
+  <a href="glass.php">Glasses</a>
+  <a href="suppliers.php">Suppliers</a>
+  <a href="customers.php">Customers</a>
+
+  <!-- Purchase Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn">Purchase ▼</button>
+    <div class="dropdown-content">
+      <a href="purchase.php">Add Purchase</a>
+      <a href="purchase_view.php">View Purchases</a>
+      <a href="purchase_return.php">Add Purchase Return</a>
+      <a href="purchase_return_view.php">View Purchase Returns</a>
+    </div>
+  </div>
+
+  <!-- Sales Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn">Sales ▼</button>
+    <div class="dropdown-content">
+      <a href="sales.php">Add Sale</a>
+      <a href="sale_view.php">View Sales</a>
+      <a href="sale_return.php">Add Sale Return</a>
+      <a href="sale_return_view.php">View Sale Returns</a>
+    </div>
+  </div>
+
+
+  <!-- Report Dropdown -->
+  <div class="dropdown">
+    <button class="dropbtn" style="text-decoration:underline;">Report ▼</button>
+    <div class="dropdown-content">
+      <a href="report.php">Main Report</a>
+      <a href="rate_list.php">Rate List</a>
+       <a href="ledger.php">Ledger</a>
+  <a href="stock.php" style="text-decoration:underline;">Stock</a>
+  <a href="balance.php">Balance</a>
+
+    </div>
+  </div>
+
+  <a href="logout.php" style="color:#ffdddd;">Logout</a>
+</nav>
+
 </div>
 
 <div class="container">

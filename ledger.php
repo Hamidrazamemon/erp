@@ -16,11 +16,9 @@ if (isset($_POST['add_total_payment'])) {
 
     if ($type === 'customer') {
         $tbl = 'sales';
-        $col = 'sale_no';
         $col_person = 'customer_id';
     } else {
         $tbl = 'purchases';
-        $col = 'purchase_no';
         $col_person = 'supplier_id';
     }
 
@@ -34,7 +32,7 @@ if (isset($_POST['add_total_payment'])) {
         $msg = "<p style='color:red;'>Payment exceeds total remaining amount (Rs. " . number_format($total_remaining,2) . ").</p>";
     } else {
         $pdo->beginTransaction();
-        $query = $pdo->prepare("SELECT $col, remaining_amount, paid_amount FROM $tbl WHERE $col_person=? AND remaining_amount>0 ORDER BY created_at ASC");
+        $query = $pdo->prepare("SELECT id, remaining_amount, paid_amount FROM $tbl WHERE $col_person=? AND remaining_amount>0 ORDER BY created_at ASC");
         $query->execute([$person_id]);
         $bills = $query->fetchAll(PDO::FETCH_ASSOC);
 
@@ -45,42 +43,112 @@ if (isset($_POST['add_total_payment'])) {
             $apply = min($b['remaining_amount'], $remaining_payment);
             $new_remaining = $b['remaining_amount'] - $apply;
             $new_paid = $b['paid_amount'] + $apply;
-            $update = $pdo->prepare("UPDATE $tbl SET remaining_amount=?, paid_amount=? WHERE $col=?");
-            $update->execute([$new_remaining, $new_paid, $b[$col]]);
+            $update = $pdo->prepare("UPDATE $tbl SET remaining_amount=?, paid_amount=? WHERE id=?");
+            $update->execute([$new_remaining, $new_paid, $b['id']]);
             $remaining_payment -= $apply;
         }
 
+        // **Insert into payments table**
+        $stmt = $pdo->prepare("INSERT INTO payments (person_id, type, amount, created_at) VALUES (?, ?, ?, NOW())");
+        $stmt->execute([$person_id, $type, $amount]);
+
         $pdo->commit();
-        $msg = "<p style='color:green;'>Payment of Rs. $amount successfully adjusted to outstanding bills.</p>";
+        $msg = "<p style='color:green;'>Payment of Rs. $amount successfully added and recorded in payment history.</p>";
     }
 }
+
 
 /* ------------------- FETCH DROPDOWN OPTIONS ------------------- */
 $customers = $pdo->query("SELECT id, name FROM customers ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $suppliers = $pdo->query("SELECT id, name FROM suppliers ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
+
 /* ------------------- VIEW LEDGER ------------------- */
+$payment_rows = [];
+if (isset($_POST['view_payments']) && $type && $person_id) {
+    $stmt = $pdo->prepare("SELECT id, type, amount, created_at 
+                           FROM payments WHERE person_id=? ORDER BY created_at ASC");
+    $stmt->execute([$person_id]);
+    $payment_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Person name fetch karo
+    if($type==='customer'){
+        $person_name = $pdo->prepare("SELECT name FROM customers WHERE id=?");
+    } else {
+        $person_name = $pdo->prepare("SELECT name FROM suppliers WHERE id=?");
+    }
+    $person_name->execute([$person_id]);
+    $person_name = $person_name->fetchColumn();
+}
+
 if (isset($_POST['view']) && $type && $person_id) {
+    $rows = [];
     if ($type === 'customer') {
         $stmt = $pdo->prepare("SELECT name FROM customers WHERE id=?");
         $stmt->execute([$person_id]);
         $person_name = $stmt->fetchColumn();
 
-        $query = $pdo->prepare("SELECT 'Sale' AS type, sale_no AS code, total_amount, paid_amount, remaining_amount, created_at 
-                                FROM sales WHERE customer_id=? ORDER BY created_at ASC");
+        // Sales
+        $query1 = $pdo->prepare("SELECT 'Sale' AS type, sale_no AS code, total_amount, paid_amount, remaining_amount, created_at 
+                                 FROM sales WHERE customer_id=?");
+        $query1->execute([$person_id]);
+        $sales = $query1->fetchAll(PDO::FETCH_ASSOC);
+
+        // Sale Returns
+        $query2 = $pdo->prepare("
+    SELECT 
+        'Sale Return' AS type, 
+        sr.return_no AS code, 
+        -sr.total_amount AS total_amount, 
+        0 AS paid_amount, 
+        -sr.total_amount AS remaining_amount, 
+        sr.created_at
+    FROM sale_return sr
+    JOIN sales s ON sr.sale_id = s.id
+    WHERE s.customer_id=?
+");
+
+        $query2->execute([$person_id]);
+        $returns = $query2->fetchAll(PDO::FETCH_ASSOC);
+
+        $rows = array_merge($sales, $returns);
+
     } else {
         $stmt = $pdo->prepare("SELECT name FROM suppliers WHERE id=?");
         $stmt->execute([$person_id]);
         $person_name = $stmt->fetchColumn();
 
-        $query = $pdo->prepare("SELECT 'Purchase' AS type, purchase_no AS code, total_amount, paid_amount, remaining_amount, created_at 
-                                FROM purchases WHERE supplier_id=? ORDER BY created_at ASC");
+        // Purchases
+        $query1 = $pdo->prepare("SELECT 'Purchase' AS type, purchase_no AS code, total_amount, paid_amount, remaining_amount, created_at 
+                                 FROM purchases WHERE supplier_id=?");
+        $query1->execute([$person_id]);
+        $purchases = $query1->fetchAll(PDO::FETCH_ASSOC);
+
+        // Purchase Returns
+        $query2 = $pdo->prepare("
+    SELECT 
+        'Purchase Return' AS type, 
+        pr.return_no AS code, 
+        -pr.total_amount AS total_amount, 
+        0 AS paid_amount, 
+        -pr.total_amount AS remaining_amount, 
+        pr.created_at
+    FROM purchase_return pr
+    JOIN purchases p ON pr.purchase_id = p.id
+    WHERE p.supplier_id=?
+");
+
+        $query2->execute([$person_id]);
+        $returns = $query2->fetchAll(PDO::FETCH_ASSOC);
+
+        $rows = array_merge($purchases, $returns);
     }
 
-    $query->execute([$person_id]);
-    $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+    // Sort by date
+    usort($rows, function($a,$b){ return strtotime($a['created_at']) - strtotime($b['created_at']); });
 }
 ?>
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -102,11 +170,10 @@ th{background:#0078d7;color:#fff}
 .total-box strong{color:#0078d7}
 nav a { color: white; text-decoration: none; margin-right: 15px; font-weight: bold; }
 nav a:hover { text-decoration: underline; }
-
+.print-btn{margin-bottom:10px;}
 @media print {
   body { background: #fff; }
-  .topbar, form, button[name="add_total_payment"], nav { display: none !important; }
-  .print-btn { display: none !important; }
+  .topbar, form, button[name="add_total_payment"], nav, .print-btn { display: none !important; }
   .container { box-shadow: none; }
 }
 </style>
@@ -115,23 +182,14 @@ function showNames() {
     var type = document.getElementById('type').value;
     var cDiv = document.getElementById('customer_div');
     var sDiv = document.getElementById('supplier_div');
-    var cSel = cDiv.querySelector('select');
-    var sSel = sDiv.querySelector('select');
-    if (type === 'customer') {
-        cDiv.style.display='inline'; sDiv.style.display='none';
-        cSel.disabled=false; sSel.disabled=true;
-    } else if (type === 'supplier') {
-        sDiv.style.display='inline'; cDiv.style.display='none';
-        sSel.disabled=false; cSel.disabled=true;
-    } else {
-        sDiv.style.display='none'; cDiv.style.display='none';
-        sSel.disabled=true; cSel.disabled=true;
-    }
+    cDiv.style.display = sDiv.style.display = 'none';
+    cDiv.querySelector('select').disabled = true;
+    sDiv.querySelector('select').disabled = true;
+    if(type==='customer') { cDiv.style.display='inline'; cDiv.querySelector('select').disabled=false; }
+    if(type==='supplier') { sDiv.style.display='inline'; sDiv.querySelector('select').disabled=false; }
 }
 window.onload = showNames;
-function printLedger(){
-    window.print();
-}
+function printLedger(){ window.print(); }
 </script>
 </head>
 <body>
@@ -163,7 +221,7 @@ function printLedger(){
       <option value="supplier" <?= ($type==='supplier')?'selected':'' ?>>Supplier</option>
     </select>
 
-    <div id="customer_div" style="display:inline;">
+    <div id="customer_div" style="display:none;">
       <label><strong>Customer:</strong></label>
       <select name="person_id">
         <option value="">Select Customer</option>
@@ -173,7 +231,7 @@ function printLedger(){
       </select>
     </div>
 
-    <div id="supplier_div" style="display:inline;">
+    <div id="supplier_div" style="display:none;">
       <label><strong>Supplier:</strong></label>
       <select name="person_id">
         <option value="">Select Supplier</option>
@@ -188,7 +246,16 @@ function printLedger(){
 
   <?php if($rows): ?>
   <h3><?= ucfirst($type) ?>: <?= htmlspecialchars($person_name) ?></h3>
+  <div style="display:flex; gap:10px; margin-bottom:10px;">
   <button class="print-btn" onclick="printLedger()">🖨️ Print Report</button>
+
+  <form method="POST" style="display:inline;">
+    <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
+    <input type="hidden" name="person_id" value="<?= htmlspecialchars($person_id) ?>">
+    <button type="submit" name="view_payments" style="background:#28a745;">💳 Payment History</button>
+  </form>
+</div>
+
   <table>
     <tr>
       <th>#</th>
@@ -236,5 +303,30 @@ function printLedger(){
     <p style="color:red;">No transactions found for this <?= htmlspecialchars($type) ?>.</p>
   <?php endif; ?>
 </div>
+<?php if($payment_rows): ?>
+<h3>Payment History for <?= htmlspecialchars($person_name) ?></h3>
+<table>
+  <tr>
+    <th>#</th>
+    <th>Type</th>
+    <th>Amount</th>
+    <th>Date</th>
+  </tr>
+  <?php 
+  $count = 1; 
+  foreach($payment_rows as $p): ?>
+  <tr>
+    <td><?= $count++ ?></td>
+    <td><?= htmlspecialchars($p['type']) ?></td>
+    <td><?= number_format($p['amount'],2) ?></td>
+    <td><?= htmlspecialchars($p['created_at']) ?></td>
+  </tr>
+  <?php endforeach; ?>
+</table>
+<?php elseif(isset($_POST['view_payments'])): ?>
+  <p style="color:red;">No payments found for this <?= htmlspecialchars($type) ?>.</p>
+<?php endif; ?>
+
+
 </body>
 </html>

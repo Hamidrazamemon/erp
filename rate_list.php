@@ -1,6 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
+
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: index.php");
+    exit;
+}
 
 // Fetch suppliers & varieties
 $suppliers = $pdo->query("SELECT id,name FROM suppliers ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);

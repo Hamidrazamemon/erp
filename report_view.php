@@ -1,7 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
 
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: index.php");
+    exit;
+}
 $report_type = $_POST['report_type'] ?? '';
 $duration = $_POST['duration'] ?? '';
 $from_date = $_POST['from_date'] ?? '';

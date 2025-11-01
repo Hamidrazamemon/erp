@@ -1,7 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
 
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: index.php");
+    exit;
+}
 // fetch purchases
 $purchases = $pdo->query("SELECT id,purchase_no FROM purchases ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>

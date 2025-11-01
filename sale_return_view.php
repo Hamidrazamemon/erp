@@ -1,6 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
+
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: index.php");
+    exit;
+}
 
 // fetch all sale returns with customer info
 $returns = $pdo->query("

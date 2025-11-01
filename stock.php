@@ -1,11 +1,11 @@
 <?php
 session_start();
 require 'includes/db.php';
+
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
-    header("Location: login.php");
+    header("Location: index.php");
     exit;
 }
-
 // Fetch variety names
 $varieties = $pdo->query("SELECT DISTINCT variety_name FROM glass_powers ORDER BY variety_name")->fetchAll(PDO::FETCH_COLUMN);
 

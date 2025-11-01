@@ -3,10 +3,9 @@ session_start();
 require 'includes/db.php';
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
-    header("Location: login.php");
+    header("Location: index.php");
     exit;
 }
-
 // ADD CUSTOMER
 if (isset($_POST['add_customer'])) {
     $code = trim($_POST['code']);

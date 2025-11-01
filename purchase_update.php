@@ -1,6 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
+
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: index.php");
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $purchase_id = (int)($_POST['id'] ?? 0);

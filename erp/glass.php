@@ -1,6 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
+
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: login.php");
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $variety = trim($_POST['variety_name']);

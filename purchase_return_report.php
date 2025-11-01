@@ -1,6 +1,11 @@
 <?php
-require 'includes/session.php';
+session_start();
 require 'includes/db.php';
+
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
+    header("Location: index.php");
+    exit;
+}
 require_once __DIR__ . '/vendor/autoload.php'; // path to autoload.php
 
 $return_id = (int)($_GET['id'] ?? 0);

@@ -4,7 +4,7 @@ require 'includes/db.php';
 require_once __DIR__ . '/vendor/autoload.php'; // for mpdf if needed
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
-    header("Location: login.php");
+    header("Location: index.php");
     exit;
 }
 
